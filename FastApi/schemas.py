@@ -14,6 +14,9 @@ class UserSchema(BaseModel):
     class Config:
         orm_mode = True
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 # Chat Schema updated to accept file

@@ -1,30 +1,42 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi.responses import JSONResponse
 from datetime import datetime
-from services import create_user, authenticate_user, generate_token, create_chat, send_message
-from schemas import UserSchema, ChatSchema, MessageSchema
+from services import create_user, authenticate_user, generate_token, create_chat, send_message, verify_user
+from schemas import UserSchema, ChatSchema, MessageSchema, LoginRequest
 from shutil import copyfileobj
+from fastapi.middleware.cors import CORSMiddleware
 import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 app = FastAPI()
 UPLOAD_DIRECTORY = "public"
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows the listed origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
 
-@app.post("/signup", response_model=str)
-def signup(user: UserSchema):
-    user_id = create_user(user)
-    return user_id
+@app.post("/signup")
+async def signup(user: UserSchema):
+    # user_id = await create_user(user)
+    await create_user(user)
+    return {"message" : "check mail for varification"}
+
+@app.get("/verify/{token}")
+def verify(token: str):
+    user = verify_user(token);
+    return JSONResponse(content={"token": token, "user": user.dict()})
+
 
 @app.post("/login")
-def login(email: str, password: str):
-    user_data = authenticate_user(email, password)
-    print(user_data["_id"])
-    return generate_token(user_data)
+def login(login_data: LoginRequest):
+    user_data = authenticate_user(login_data.email, login_data.password)
+    return JSONResponse(content={"user": user_data.dict()})
 
 @app.post("/chat/create")
 async def create_new_chat(
@@ -67,3 +79,9 @@ def send_new_message(chat_id: str, message: MessageSchema):
     )
     return message_data
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail}  # Ensure that the `detail` is in a structured JSON format
+    )

@@ -8,6 +8,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import ChatPage from './pages/ChatPage';
 import Layout from './components/Layout';
+import VerifyPage from './pages/VerifyPage';
 
 function App() {
   const { user } = useAuth();
@@ -31,6 +32,8 @@ function App() {
         <Route path="/chat/:chatId" element={<ChatPage />} />
         <Route path="/chat/new" element={<ChatPage isNew={true} />} />
       </Route>
+
+       <Route path="/verify/:token" element={<VerifyPage />} />
       
       {/* Catch all */}
       <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} />} />

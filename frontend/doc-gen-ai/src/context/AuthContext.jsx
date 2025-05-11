@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 React
 const AuthContext = createContext(undefined);
 
@@ -13,6 +14,8 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+
 
   // Check for existing user in localStorage on mount
   useEffect(() => {
@@ -27,51 +30,74 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo, just check if email contains '@' and password length > 5
-      if (!email.includes('@') || password.length < 6) {
-        throw new Error('Invalid credentials');
+
+      // Make API request to FastAPI backend
+      const response = await fetch(import.meta.env.VITE_API_URL + "/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      // Check if response is OK
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.message);
       }
-      
-      const mockUser = {
-        id: `user_${Date.now()}`,
-        name: email.split('@')[0],
-        email,
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('docgenius_user', JSON.stringify(mockUser));
+
+      // Parse JSON response
+      const data = await response.json();
+      console.log(data)
+
+      // Store user data in localStorage
+      setUser(data.user);
+      localStorage.setItem("docgenius_user", JSON.stringify({ ...data.user }));
+      // setUser(JSON.parse(data.user))
+      // navigate('/dashboard');
+
+
     } finally {
       setLoading(false);
     }
   };
-
   // Mock signup function
   const signup = async (name, email, password) => {
     try {
       setLoading(true);
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Basic validation
-      if (!name || !email.includes('@') || password.length < 6) {
-        throw new Error('Invalid signup details');
+      const response = await fetch(import.meta.env.VITE_API_URL + '/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.message);
       }
-      
-      const mockUser = {
-        id: `user_${Date.now()}`,
-        name,
-        email,
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('docgenius_user', JSON.stringify(mockUser));
+
+      // const data = await response.json();
+
+      // Assuming the API responds with success or error messages
+      // if (data.success) {
+      //   setUser({
+      //     id: `user_${Date.now()}`,
+      //     name,
+      //     email,
+      //   });
+      //   localStorage.setItem('docgenius_user', JSON.stringify({ name, email }));
+      alert('Signup successful! Please check your email for verification.');
+      // } else {
+      //   throw new Error(data.message || 'Failed to create account.');
+      // }
+
     } finally {
       setLoading(false);
     }
   };
+
 
   // Logout function
   const logout = () => {
