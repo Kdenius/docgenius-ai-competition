@@ -24,8 +24,8 @@ const Dashboard = () => {
   // Filter chats based on search term
   const filteredChats = searchTerm
     ? chats.filter(chat => 
-        chat.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chat.documentName.toLowerCase().includes(searchTerm.toLowerCase())
+        chat.document_path.split('/').pop().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        chat.document_path.split('/').pop().toLowerCase().includes(searchTerm.toLowerCase())
       )
     : chats;
 
@@ -112,11 +112,11 @@ const Dashboard = () => {
               <BarChart size={24} />
             </div>
             <div>
-              <h3 className="text-slate-400 text-sm font-medium">Active Today</h3>
+              <h3 className="text-slate-400 text-sm font-medium">Created Today</h3>
               <p className="text-2xl font-bold text-slate-100">
                 {chats.filter(chat => {
                   const today = new Date().toDateString();
-                  const chatDate = new Date(chat.updatedAt).toDateString();
+                  const chatDate = new Date(chat.timestamp).toDateString();
                   return today === chatDate;
                 }).length}
               </p>
@@ -133,7 +133,7 @@ const Dashboard = () => {
               <h3 className="text-slate-400 text-sm font-medium">Recent Activity</h3>
               <p className="text-2xl font-bold text-slate-100">
                 {chats.length > 0 ? (
-                  formatDate(chats[0].updatedAt)
+                  formatDate(chats[0].timestamp)
                 ) : (
                   "No activity"
                 )}
@@ -159,31 +159,31 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredChats.map(chat => (
+            {filteredChats.map((chat, index) => (
               <Link 
-                key={chat.id}
-                to={`/chat/${chat.id}`}
+                key={chat._id || index}
+                to={`/chat/${chat._id}`}
                 className="card hover:border-primary-700 transition-all duration-200 group overflow-hidden"
               >
                 <div className="p-5">
                   <div className="flex justify-between items-start mb-3">
-                    {getFileIcon(chat.documentType)}
+                    {getFileIcon(chat.type)}
                     <span className="text-xs text-slate-400 bg-dark-200 px-2 py-1 rounded">
-                      {chat.documentType?.toUpperCase() || 'DOCUMENT'}
+                      {chat.type?.toUpperCase() || 'DOCUMENT'}
                     </span>
                   </div>
                   <h3 className="font-medium text-lg mb-1 text-slate-200 group-hover:text-primary-300 transition-colors duration-200 truncate">
-                    {chat.title}
+                    {chat.document_path.split('/').pop()}
                   </h3>
                   <p className="text-sm text-slate-400 truncate mb-3">
-                    {chat.documentName}
+                    {chat.document_path.split('/').pop()}
                   </p>
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span className="flex items-center gap-1">
                       <MessageSquare size={14} />
                       {chat.messages.length} messages
                     </span>
-                    <span>{formatDate(chat.updatedAt)}</span>
+                    <span>{formatDate(chat.timestamp)}</span>
                   </div>
                 </div>
                 <div className="h-1.5 w-full bg-gradient-to-r from-primary-700 to-primary-500 transform translate-y-1.5 group-hover:translate-y-0 transition-transform duration-200"></div>

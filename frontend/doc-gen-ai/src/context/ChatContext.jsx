@@ -35,23 +35,17 @@ export const ChatProvider = ({ children }) => {
     }
   }, [chats, user]);
 
-  const createNewChat = (documentName, documentType, documentUrl) => {
+  const createNewChat = (upload) => {
+    // const randomCode = Math.floor(100000 + Math.random() * 900000);
     const newChat = {
-      id: `chat_${Date.now()}`,
-      title: documentName.split('.')[0] || 'New Chat',
-      documentName,
-      documentType,
-      documentUrl,
-      createdAt: new Date().toISOString(),
+      _id: upload._id,
+      doc_summary: upload.doc_summary,
+      size: upload.size,
+      type: upload.type,
+      document_path : upload.document_path,
+      timestamp: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      messages: [
-        {
-          id: `msg_${Date.now()}`,
-          content: `I've analyzed your document: ${documentName}. What would you like to know about it?`,
-          sender: 'ai',
-          timestamp: new Date().toISOString(),
-        }
-      ]
+      messages: []
     };
     
     setChats(prevChats => [newChat, ...prevChats]);
@@ -61,77 +55,106 @@ export const ChatProvider = ({ children }) => {
   };
 
   const sendMessage = async (content) => {
-    if (!currentChat) return;
-    
-    // Add user message
-    const userMessage = {
-      id: `msg_${Date.now()}`,
-      content,
-      sender: 'user',
-      timestamp: new Date().toISOString(),
-    };
-    
-    // Update current chat with user message
-    const updatedChat = {
+  if (!currentChat) return;
+
+  // // Add user message
+  // const userMessage = {
+  //   chat_id: currentChat._id,
+  //   text: content,
+  //   answer:null,
+  //   timestamp: new Date().toISOString
+  // };
+
+  // // Update current chat immediately with the user message
+  // const updatedChat = {
+  //   ...currentChat,
+  //   updatedAt: new Date().toISOString(),
+  //   messages: [...currentChat.messages, userMessage],
+  // };
+
+  // setCurrentChat(updatedChat);
+  // setChats(prevChats =>
+  //   prevChats.map(chat =>
+  //     chat._id === currentChat._id ? updatedChat : chat
+  //   )
+  // );
+
+  try {
+    // Send POST request with chat_id and text to the API
+    const response = await fetch(import.meta.env.VITE_API_URL+'/chat/message', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: currentChat._id,
+        text: content,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to send message');
+    }
+
+    // Expected API response: { _id, text, answer, timestamp }
+    const data = await response.json();
+    console.log(data);
+
+    // Append the AI message to the chat messages array
+    const finalUpdatedChat = {
       ...currentChat,
       updatedAt: new Date().toISOString(),
-      messages: [...currentChat.messages, userMessage],
+      messages: [...currentChat.messages, data],
     };
-    
-    setCurrentChat(updatedChat);
-    
-    // Update chats list
-    setChats(prevChats => 
-      prevChats.map(chat => chat.id === currentChat.id ? updatedChat : chat)
-    );
-    
-    // Simulate AI response (1-2 second delay)
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-    
-    // Sample AI responses
-    const aiResponses = [
-      "Based on the document, I can confirm that information is correct.",
-      "The document doesn't specifically mention that, but it implies that...",
-      "According to page 3 of the document, the relevant information states...",
-      "That's a great question! The document addresses this in section 2.1, explaining that...",
-      "I found several references to that in the document. The main points are...",
-    ];
-    
-    // Select random response
-    const aiContent = aiResponses[Math.floor(Math.random() * aiResponses.length)];
-    
-    // Add AI response
-    const aiMessage = {
-      id: `msg_${Date.now()}`,
-      content: aiContent,
-      sender: 'ai',
-      timestamp: new Date().toISOString(),
-    };
-    
-    // Update current chat with AI message
-    const finalUpdatedChat = {
-      ...updatedChat,
-      messages: [...updatedChat.messages, aiMessage],
-    };
-    
+
+    // // Update state with the new chat messages that include the AI's reply
     setCurrentChat(finalUpdatedChat);
-    
-    // Update chats list
-    setChats(prevChats => 
-      prevChats.map(chat => chat.id === currentChat.id ? finalUpdatedChat : chat)
+    setChats(prevChats =>
+      prevChats.map(chat =>
+        chat._id === currentChat._id ? finalUpdatedChat : chat
+      )
     );
-  };
+  } catch (error) {
+    console.error('Error sending message:', error);
+    // Optionally, display error feedback to the user here
+  }
+};
 
   const getChat = (chatId) => {
-    return chats.find(chat => chat.id === chatId);
+    return chats.find(chat => chat._id === chatId);
   };
 
-  const deleteChat = (chatId) => {
-    setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-    if (currentChat && currentChat.id === chatId) {
-      setCurrentChat(null);
+  const deleteChat = async (chatId) => {
+  try {
+    // Get user ID from props or context
+    const userId = user._id;
+
+    // Send DELETE request to backend
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/chat/delete?chat_id=${chatId}&user_id=${userId}`, {
+      method: 'DELETE',
+    });
+
+    // Check if the response is OK (status 200)
+    if (response.ok) {
+      // Remove the chat from the state if the delete was successful
+      setChats(prevChats => prevChats.filter(chat => chat._id !== chatId));
+
+      // If the current chat is the one that was deleted, clear it
+      if (currentChat && currentChat.id === chatId) {
+        setCurrentChat(null);
+      }
+      localStorage.setItem('docgenius_chats', JSON.stringify(chats));
+      // Optionally, show a success message
+      console.log("Chat deleted successfully!");
+    } else {
+      // Handle any error responses from the server
+      const errorData = await response.json();
+      console.error("Error deleting chat:", errorData.message);
     }
-  };
+  } catch (error) {
+    console.error("Failed to delete chat:", error);
+  }
+};
 
   return (
     <ChatContext.Provider value={{

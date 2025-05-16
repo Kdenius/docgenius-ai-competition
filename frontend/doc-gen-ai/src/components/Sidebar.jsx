@@ -120,27 +120,28 @@ const Sidebar = () => {
                   Recent Chats
                 </h2>
                 <div className="space-y-1 max-h-[calc(100vh-300px)] overflow-y-auto pr-1">
-                  {chats.map(chat => (
+                  {console.log(chats)}
+                  {chats.map((chat, index) => (
                     <Link
-                      key={chat.id}
-                      to={`/chat/${chat.id}`}
+                      key={chat._id || index}
+                      to={`/chat/${chat._id}`}
                       className={`group flex items-start gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-dark-100 rounded-md transition-all duration-200 ${
-                        location.pathname === `/chat/${chat.id}` ? 'bg-primary-900/50 text-primary-300' : ''
+                        location.pathname === `/chat/${chat._id}` ? 'bg-primary-900/50 text-primary-300' : ''
                       }`}
                     >
                       <MessageSquare size={16} className="mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center">
-                          <p className="font-medium truncate">{chat.title}</p>
+                          <p className="font-medium truncate">{chat.document_path.split('/').pop()}</p>
                           <button 
-                            onClick={(e) => handleChatDelete(e, chat.id)}
+                            onClick={(e) => handleChatDelete(e, chat._id)}
                             className="hidden group-hover:block text-slate-500 hover:text-red-400 p-1"
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
-                        <p className="text-xs text-slate-500 truncate">{chat.documentName}</p>
-                        <p className="text-xs text-slate-400">{formatRelativeTime(chat.updatedAt)}</p>
+                        <p className="text-xs text-slate-500 truncate">{chat.document_path.split('/').pop()}</p>
+                        <p className="text-xs text-slate-400">{formatRelativeTime(chat.timestamp)}</p>
                       </div>
                     </Link>
                   ))}

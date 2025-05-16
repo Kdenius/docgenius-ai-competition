@@ -30,6 +30,7 @@ const ChatPage = ({ isNew = false }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [documentDetails, setDocumentDetails] = useState(null);
   const [showDocumentInfo, setShowDocumentInfo] = useState(false);
+  const [showOneTimeInput, setShowOneTimeInput] = useState('');
   const messageEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -69,7 +70,7 @@ const ChatPage = ({ isNew = false }) => {
       return;
     }
 
-    console.log('it called');
+    console.log('file uploading called');
     
     try {
       setIsUploading(true);
@@ -96,6 +97,12 @@ const ChatPage = ({ isNew = false }) => {
         lastModified: new Date(file.lastModified).toISOString(),
       };
 
+      // setDocumentDetails(details);
+
+      // Create new chat with the uploaded document
+      const newChat = createNewChat(
+        upload // In a real app, this would be a URL from your server
+      );
       setDocumentDetails(details);
       if (isNew) {
         navigate(`/chat/${newChat.id}`);
@@ -128,13 +135,14 @@ const ChatPage = ({ isNew = false }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!message.trim() || !currentChat) return;
-
+    
     const trimmedMessage = message.trim();
+    setShowOneTimeInput(trimmedMessage);
     setMessage('');
 
     await sendMessage(trimmedMessage);
+    setShowOneTimeInput('');
   };
 
   const handleKeyDown = (e) => {
@@ -276,10 +284,10 @@ const ChatPage = ({ isNew = false }) => {
               <ArrowLeft size={20} />
             </button>
             <div className="flex items-center">
-              {getFileIcon(currentChat.documentType)}
+              {getFileIcon(currentChat.type)}
               <div className="ml-3">
-                <h1 className="text-lg font-semibold text-slate-100">{currentChat.title}</h1>
-                <p className="text-xs text-slate-500">{currentChat.documentName}</p>
+                <h1 className="text-lg font-semibold text-slate-100">{currentChat.document_path.split('/').pop()}</h1>
+                <p className="text-xs text-slate-500">{currentChat.document_path.split('/').pop()}</p>
               </div>
             </div>
           </div>
@@ -299,29 +307,25 @@ const ChatPage = ({ isNew = false }) => {
 
       {/* Chat Container */}
       <div className="flex-1 overflow-y-auto p-4" ref={chatContainerRef}>
-        {currentChat.messages.map((msg) => (
+        {currentChat.messages.map((msg, index) => (
+          <>
           <div
-            key={msg.id}
-            className={`flex mb-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            key={(msg._id || index)+'1'}
+            className={`flex mb-4 justify-end`}
           >
             <div className={`
               flex items-start max-w-[80%] lg:max-w-[70%]
-              ${msg.sender === 'user' ? 'bg-primary-900/40 text-slate-100' : 'bg-dark-100 text-slate-200'}
-              p-3 rounded-lg
+              bg-primary-900/40 text-slate-100 p-3 rounded-lg
             `}>
               <div className={`
                 p-1.5 rounded-full mr-2 shrink-0 mt-0.5
-                ${msg.sender === 'user' ? 'bg-primary-700/50' : 'bg-slate-700/50'}
+                bg-primary-700/50
               `}>
-                {msg.sender === 'user' ? (
                   <User size={16} className="text-primary-300" />
-                ) : (
-                  <Bot size={16} className="text-slate-300" />
-                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="prose prose-sm prose-invert">
-                  {msg.content}
+                  {msg.text}
                 </div>
                 <div className="text-xs text-slate-500 mt-1 text-right">
                   {formatDate(msg.timestamp)}
@@ -329,7 +333,62 @@ const ChatPage = ({ isNew = false }) => {
               </div>
             </div>
           </div>
+
+          <div
+            key={(msg._id || index)+'2'}
+            className={`flex mb-4 justify-start`}
+          >
+            <div className={`
+              flex items-start max-w-[80%] lg:max-w-[70%]
+              bg-dark-100 text-slate-200
+              p-3 rounded-lg
+            `}>
+              <div className={`
+                p-1.5 rounded-full mr-2 shrink-0 mt-0.5
+                bg-slate-700/50
+              `}>
+                  <Bot size={16} className="text-slate-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="prose prose-sm prose-invert">
+                  {msg.answer}
+                </div>
+                <div className="text-xs text-slate-500 mt-1 text-right">
+                  {formatDate(msg.timestamp)}
+                </div>
+              </div>
+            </div>
+          </div>
+          </>
         ))}
+
+        { showOneTimeInput && (
+          <div
+            className={`flex mb-4 justify-end`}
+          >
+            <div className={`
+              flex items-start max-w-[80%] lg:max-w-[70%]
+              bg-primary-900/40 text-slate-100 p-3 rounded-lg
+            `}>
+              <div className={`
+                p-1.5 rounded-full mr-2 shrink-0 mt-0.5
+                bg-primary-700/50
+              `}>
+                  <User size={16} className="text-primary-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="prose prose-sm prose-invert">
+                  {showOneTimeInput}
+                </div>
+                <div className="text-xs text-slate-500 mt-1 text-right">
+                  {formatDate(new Date().toISOString())}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+
         <div ref={messageEndRef} />
       </div>
 
@@ -342,10 +401,10 @@ const ChatPage = ({ isNew = false }) => {
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about your document..."
-              className="input py-3 min-h-[60px] max-h-[180px] resize-none pr-12"
+              className="input py-3 min-h-[40px] max-h-[180px] resize-none pr-12"
               rows={1}
             />
-            <div className="absolute right-2 bottom-2 flex">
+            {/* <div className="absolute right-2 bottom-2 flex">
               <button
                 type="button"
                 className="p-2 text-slate-400 hover:text-slate-200"
@@ -360,14 +419,14 @@ const ChatPage = ({ isNew = false }) => {
                   accept=".pdf,.doc,.docx,.txt,.html"
                 />
               </button>
-            </div>
+            </div> */}
           </div>
           <button
             type="submit"
-            className="btn-primary h-[60px] aspect-square flex items-center justify-center"
+            className="btn-primary mb-1.5 min-h-[40px] aspect-square flex items-center justify-center"
             disabled={!message.trim()}
           >
-            <Send size={20} />
+            <Send size={21} />
           </button>
         </form>
         <div className="flex items-center justify-between mt-2 px-2 text-xs text-slate-500">
@@ -396,16 +455,16 @@ const ChatPage = ({ isNew = false }) => {
           </div>
 
           <div className="p-4">
-            <div className="flex justify-center mb-6">
-              {getFileIcon(currentChat.documentType)}
-            </div>
+            {/* <div className="flex justify-center mb-6">
+              {getFileIcon(currentChat.type)}
+            </div> */}
 
-            <h3 className="text-xl font-medium text-center mb-6">{currentChat.documentName}</h3>
+            <h3 className="text-xl font-medium text-center mb-6">{currentChat.document_path.split('/').pop()}</h3>
 
             <div className="card p-4 mb-4">
               <div className="flex items-center justify-between text-sm mb-3">
                 <span className="text-slate-400">Type</span>
-                <span className="text-slate-200">{currentChat.documentType?.toUpperCase() || 'Document'}</span>
+                <span className="text-slate-200">{currentChat.type?.toUpperCase() || 'Document'}</span>
               </div>
 
               <div className="flex items-center justify-between text-sm mb-3">
@@ -415,15 +474,14 @@ const ChatPage = ({ isNew = false }) => {
 
               <div className="flex items-start justify-between text-sm">
                 <span className="text-slate-400">Created</span>
-                <span className="text-slate-200 text-right">{formatDate(currentChat.createdAt)}</span>
+                <span className="text-slate-200 text-right">{formatDate(currentChat.timestamp)}</span>
               </div>
             </div>
 
             <div className="card p-4 mb-6">
               <h4 className="text-sm font-medium text-slate-300 mb-3">Document Summary</h4>
               <p className="text-sm text-slate-400">
-                This document contains important information related to the project specifications
-                and requirements. It includes details about timelines, resources, and deliverables.
+                {currentChat.doc_summary || 'No summary available for this document.'}
               </p>
             </div>
 

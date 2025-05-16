@@ -1,8 +1,9 @@
+from bson import ObjectId
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from io import BytesIO
 from fastapi.responses import JSONResponse
 from datetime import datetime
-from services import create_user, authenticate_user, generate_token, create_chat, send_message, verify_user
+from services import create_user, authenticate_user, delete, generate_token, create_chat, send_message, verify_user
 from schemas import UserSchema, ChatSchema, MessageSchema, LoginRequest
 from shutil import copyfileobj
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,6 +104,8 @@ async def create_new_chat(
     file: UploadFile = File(...)
 ):
     try:
+        content = await file.read()
+        file.seek(0)
         file_extension = file.filename.split(".")[-1]
         # print('ayatoo ave se')
         if file_extension == "pdf":
@@ -112,32 +115,33 @@ async def create_new_chat(
         elif file_extension == "html":
             raw_text = extract_text_from_html(file)
         elif file_extension == "txt":
-            content = await file.read()
+            # content = await file.read()
             raw_text = content.decode('utf-8')
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format")
         
-        # # Generate the new file name using user ID and timestamp
-        # timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        # file_extension = file.filename.split(".")[-1]  # Get the file extension
-        # new_filename = f"{user_id}_{timestamp}.{file_extension}"
-        # print(raw_text)
-        file_url = upload_to_azure(file, user_id)
-        # file_url = '/heloo'
+
+        # .............
+        try:
+           #login for uploading file...
+           blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=f"{user_id}/{file.filename}")
+        #    contents = file.file.read()
+        #    file.file.seek(0)
+           blob_client.upload_blob(content,overwrite=True)
+           file_url =  f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/{user_id}/{file.filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+        
+        # print('working fine', raw_text)
         file_size = file.size
 
-    #     try:
-    # # Read the file content into memory
-    #         file_content = BytesIO(await file.read())
-    #     except Exception as e:
-    #         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
-        # Now call the create_chat function with the file saved path (document_path)
         chat_data = await create_chat(file_size=file_size,file_extension=file_extension, user_id=user_id, document_path=file_url, raw_text=raw_text)
         
         # Return the created chat with its _id and the document path
         return chat_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating chat: {str(e)}")
 
 
 @app.post("/chat/message")
@@ -147,6 +151,22 @@ def send_new_message( message: MessageSchema):
         text=message.text,
     )
     return message_data
+
+@app.delete("/chat/delete")
+async def delete_chat(chat_id: str, user_id: str):
+    try:
+        # Ensure the chat_id is a valid ObjectId
+        if not ObjectId.is_valid(chat_id):
+            raise HTTPException(status_code=400, detail="Invalid chat ID")
+
+        # Convert chat_id and user_id to ObjectId
+        chat_id_obj = ObjectId(chat_id)
+        user_id_obj = ObjectId(user_id)
+
+        return delete(chat_id=chat_id_obj,user_id=user_id_obj)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting chat: {str(e)}")
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc: HTTPException):

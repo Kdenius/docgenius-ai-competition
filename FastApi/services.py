@@ -304,9 +304,12 @@ async def create_chat(file_size: int,file_extension: str, user_id: str,raw_text:
     
     # Return the created chat with its `_id` and document_path
     return {
-        "id": str(result.inserted_id),  # Ensure _id is serialized as string
-        "user_id": user_id,
-        "document_path": document_path
+        "_id": str(result.inserted_id),  # Ensure _id is serialized as string
+        "document_path": document_path,
+        "timestamp": chat_data["timestamp"],
+        "type": chat_data["type"],
+        "size": chat_data["size"],
+        "doc_summary": chat_data["doc_summary"],
     }
 
 
@@ -361,11 +364,38 @@ def send_message(chat_id: str, text: str):
         {"$push": {"message_ids": result.inserted_id}}
     )
     
-    # Return the created message with its `_id`
+    # Return the created message with its _id
     return {
         "id": str(result.inserted_id),
+        "text": text,
+        "answer": answer,
+        "timestamp": datetime.utcnow()
     }
 
+def delete(chat_id: ObjectId, user_id: ObjectId):
+    db = get_db()
+
+    # Fetch the chat document to get the message_ids
+    chat = db.chats.find_one({"_id": chat_id})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    message_ids = chat.get("message_ids", [])
+
+    # Step 1: Remove the chat from the user's chat_ids list
+    db.users.update_one(
+        {"_id": user_id},
+        {"$pull": {"chat_ids": chat_id}}
+    )
+
+    # Step 2: Delete the chat document
+    db.chats.delete_one({"_id": chat_id})
+
+    # Step 3: Delete all the messages related to this chat using the message_ids
+    if message_ids:
+        db.messages.delete_many({"_id": {"$in": [ObjectId(mid) for mid in message_ids]}})
+
+    return {"message": "Chat and associated messages deleted successfully"}
 
 def verify_user(token: str):
      payload = verify_token(token)
