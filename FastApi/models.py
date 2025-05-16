@@ -16,17 +16,18 @@ class User(BaseModel):
         json_encoders = {ObjectId: str}
 
 
-# Chat Model
 class Chat(BaseModel):
-    topic: str
     user_id: str
     message_ids: List[str] = []  # List of message IDs (as strings)
     document_path: Optional[str] = None  # Optionally store the file path
+    timestamp: datetime
+    type: str  # Using Enum for better validation
+    size: int  # Size in KB (integer type)
+    doc_summary: Optional[str] = None  # Optional summary of the document
 
     class Config:
-        orm_mode = True
-        json_encoders = {ObjectId: str}
-
+        orm_mode = True  # Allows conversion from ORM models like SQLAlchemy
+        json_encoders = {ObjectId: str}  # If you're using ObjectId for MongoDB, this is helpful
 
 class Message(BaseModel):
     user_id: str  # User ID (Sender or Receiver)

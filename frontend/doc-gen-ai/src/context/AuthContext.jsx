@@ -51,8 +51,8 @@ export const AuthProvider = ({ children }) => {
       console.log(data)
 
       // Store user data in localStorage
-      setUser(data.user);
-      localStorage.setItem("docgenius_user", JSON.stringify({ ...data.user }));
+      setUser(data);
+      localStorage.setItem("docgenius_user", JSON.stringify({ ...data }));
       // setUser(JSON.parse(data.user))
       // navigate('/dashboard');
 

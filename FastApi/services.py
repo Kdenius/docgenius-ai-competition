@@ -1,4 +1,5 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
+from sentence_transformers import SentenceTransformer
 from db import get_db
 from models import User, Chat, Message
 from auth import hash_password, verify_password, create_access_token, verify_token
@@ -7,6 +8,13 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from transformers import pipeline
+from typing import List
+from utils import embed_text, build_faiss_index, search_faiss, structure_response
+
+# Initialize the Hugging Face summarizer pipeline
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 # Load environment variables from .env file
 load_dotenv()
@@ -168,25 +176,122 @@ def authenticate_user(email: str, password: str):
     
     # Return the User model object
     # user_data = User(**user)
-    return User(**user)  # Convert MongoDB document into Pydantic model
+    chat_ids = user.get("chat_ids", [])
+    chats = []
+    
+    if chat_ids:
+        # Query the chats collection using chat_ids
+        chats = list(db.chats.find({"_id": {"$in": [ObjectId(chat_id) for chat_id in chat_ids]}}))
+        
+          # For each chat, populate the messages and associated document metadata
+        for chat in chats:
+        # For each chat, populate the messages and associated document metadata
+         # Fetch the message_ids related to the current chat
+            message_ids = chat.get("message_ids", [])
+            
+            # Fetch the associated messages using the message_ids
+            messages = list(db.messages.find({"_id": {"$in": [ObjectId(msg_id) for msg_id in message_ids]}}))
+            
+            # Add the messages to the chat data and convert ObjectId to string
+            chat["messages"] = [
+                {
+                    "_id": str(message["_id"]),  # Convert ObjectId to string
+                    "text": message["text"],
+                    "answer": message["answer"],
+                    "timestamp": message["timestamp"]
+                }
+                for message in messages
+            ]
+            
+            
+            # Populate document metadata if applicable
+            # if chat.get("document_path"):
+            #     # Fetch document metadata (for example, document summary, sentences, embeddings)
+            #     document_data = {
+            #         "document_path": chat["document_path"],
+            #         "timestamp": chat["timestamp"],
+            #         "type": chat["type"],
+            #         "size": chat["size"],
+            #         "doc_summary": chat["doc_summary"],
+            #         "sentences": chat.get("sentences", []),
+            #         "embeddings": chat.get("embeddings", [])
+            #     }
+            #     chat["document_data"] = document_data
+    
+    # Prepare the final user data to return
+    user_data = {
+        "_id": str(user["_id"]),  # Convert ObjectId to string
+        "name": user["name"],
+        "email": user["email"],
+        "verify": user.get("verify", False),
+        "chats": [
+            {
+                "_id": str(chat["_id"]),  # Convert ObjectId to string
+                # "chat_name": chat.get("chat_name", "Unnamed Chat"),
+                "messages": chat.get("messages", []),  # Include messages if available
+                "document_path": chat["document_path"],
+                "timestamp": chat["timestamp"],
+                "type": chat["type"],
+                "size": chat["size"],
+                "doc_summary": chat["doc_summary"],
+                # "document_data": chat.get("document_data", {})  # Include document metadata
+            }
+            for chat in chats
+        ]
+    }
+
+    return user_data
 
 # Generate JWT Token
 def generate_token(user_data):
     access_token = create_access_token(data={"user_id": str(user_data["_id"])})
     return {"access_token": access_token, "token_type": "bearer"}
 
+# Utility function to split text into sentences
+def split_into_sentences(text: str) -> List[str]:
+    return [sent.strip() for sent in text.split('.') if sent.strip()]
+
 # services.py
 
-def create_chat(topic: str, user_id: str, document_path: str = None):
+# The function to clean the extracted text (if needed)
+def clean_text(raw_text: str) -> str:
+    # A placeholder for any text cleaning logic you might want
+    return raw_text.strip()
+
+def summarize_text(text: str) -> str:
+    # Use Hugging Face's BART summarizer to generate a summary
+    summary = summarizer(text, max_length=500, min_length=50, do_sample=False)
+    return summary[0]['summary_text']
+
+async def create_chat(file_size: int,file_extension: str, user_id: str,raw_text: str, document_path: str = None):
+    
+    # Clean and summarize the extracted text
+    cleaned_text = clean_text(raw_text)
+    # Summarize the cleaned text using Hugging Face summarizer
+    doc_summary = summarize_text(cleaned_text)
+    # Split cleaned text into sentences
+    sentences = split_into_sentences(cleaned_text)
+    # Generate embeddings for each sentence
+    sentence_embeddings = embedding_model.encode(sentences)
+
+    # Convert sentence embeddings to a list (for MongoDB compatibility)
+    sentence_embeddings_list = sentence_embeddings.tolist()
+
+
     db = get_db()
     
-    # Create a new chat document
     chat_data = {
-        "topic": topic,
-        "user_id": ObjectId(user_id),  # Storing the user reference (ObjectId)
-        "message_ids": [],  # Start with an empty list of message references
-        "document_path": document_path,  # Save the document path in the chat
-    }
+    "user_id": ObjectId(user_id),  # Storing the user reference (ObjectId)
+    "message_ids": [],  # Start with an empty list of message references
+    "document_path": document_path,  # Save the document path in the chat
+    "timestamp": datetime.utcnow(),  # Set the current timestamp
+    "type": file_extension,  # Set the file extension as the type
+    "size": int(file_size/1024),  # Store the file size in KB (integer)
+    "doc_summary": doc_summary,  # Store the document summary
+    "sentences" : sentences,
+    "embeddings": sentence_embeddings_list
+
+}
 
     # Insert the chat into the database
     result = db.chats.insert_one(chat_data)
@@ -200,27 +305,57 @@ def create_chat(topic: str, user_id: str, document_path: str = None):
     # Return the created chat with its `_id` and document_path
     return {
         "id": str(result.inserted_id),  # Ensure _id is serialized as string
-        "topic": topic,
         "user_id": user_id,
         "document_path": document_path
     }
 
 
-def send_message(chat_id: str, user_id: str, text: str, sent: bool):
+def send_message(chat_id: str, text: str):
     db = get_db()
+
+    # Fetch chat data and embeddings
+    chat = db.chats.find_one({"_id": ObjectId(chat_id)})
+    if not chat:
+        raise ValueError("Chat not found")
+
+    sentences = chat.get("sentences", [])
+    embeddings = chat.get("embeddings", [])
+    messages = chat.get("messages", [])
+
+    # Retrieve previous messages for better context
+    past_context = " ".join([msg["text"] for msg in messages[-3:]])  # Get last 3 messages
+    full_query = past_context + " " + text  # Merge context with the current query
+
+     # Embed the combined query
+    query_vector = embed_text(full_query)
+
+
+    if not sentences or not embeddings:
+        raise ValueError("No sentences or embeddings found in chat")
     
+    # Convert embeddings to FAISS index
+    index = build_faiss_index(embeddings)
+
+    # Search for relevant sentences
+    top_indices, _ = search_faiss(index, query_vector, k=3)
+    
+    top_sentences = [sentences[idx] for idx in top_indices]
+
+    # Generate answer based on relevant sentences
+    answer = structure_response(top_sentences)
+
     # Create a new message document
+
     message = {
-        "user_id": ObjectId(user_id),  # User ID (Sender or Receiver)
         "text": text,
-        "timestamp": datetime.utcnow(),  # Current timestamp
-        "sent": sent  # Boolean to indicate whether it's sent or received
+        "answer": answer,
+        "timestamp": datetime.utcnow()
     }
     
     # Insert the message into the database
     result = db.messages.insert_one(message)
     
-    # Add the message reference (message_id) to the chat's messages array
+    # Add the message reference (_id) to the chat's messages array
     db.chats.update_one(
         {"_id": ObjectId(chat_id)},
         {"$push": {"message_ids": result.inserted_id}}
@@ -228,8 +363,9 @@ def send_message(chat_id: str, user_id: str, text: str, sent: bool):
     
     # Return the created message with its `_id`
     return {
-        "id": str(result.inserted_id),  # Ensure _id is serialized as string
+        "id": str(result.inserted_id),
     }
+
 
 def verify_user(token: str):
      payload = verify_token(token)

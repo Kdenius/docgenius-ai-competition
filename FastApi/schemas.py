@@ -17,6 +17,8 @@ class UserSchema(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    class Config:
+        orm_mode = True
 
 
 # Chat Schema updated to accept file
@@ -28,10 +30,8 @@ class ChatSchema(BaseModel):
         orm_mode = True
 
 class MessageSchema(BaseModel):
-    user_id: str  # User ID (Sender or Receiver)
     text: str
-    timestamp: datetime  # Timestamp in ISO format
-    sent: bool  # Boolean to indicate if the message is sent (True) or received (False)
+    chat_id: str
 
     class Config:
         orm_mode = True

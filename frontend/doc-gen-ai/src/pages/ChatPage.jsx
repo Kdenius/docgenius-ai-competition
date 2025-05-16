@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, use } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
-import { 
-  Send, 
-  FileUp, 
-  FileText, 
+import { useAuth } from '../context/AuthContext';
+import {
+  Send,
+  FileUp,
+  FileText,
   CornerDownLeft,
   User,
   Bot,
@@ -23,6 +24,7 @@ import {
 
 const ChatPage = ({ isNew = false }) => {
   const { chatId } = useParams();
+  const { user } = useAuth();
   const { getChat, createNewChat, sendMessage, currentChat, setCurrentChat } = useChat();
   const [message, setMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -32,7 +34,7 @@ const ChatPage = ({ isNew = false }) => {
   const fileInputRef = useRef(null);
   const chatContainerRef = useRef(null);
   const navigate = useNavigate();
-  
+
   // Handle initial chat loading
   useEffect(() => {
     if (isNew) {
@@ -54,56 +56,84 @@ const ChatPage = ({ isNew = false }) => {
   }, [currentChat?.messages]);
 
   // Handle document upload
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     // Check file extension
     const fileExt = file.name.split('.').pop().toLowerCase();
     const allowedTypes = ['pdf', 'doc', 'docx', 'txt', 'html'];
-    
+
     if (!allowedTypes.includes(fileExt)) {
       alert('Please upload a supported file type (PDF, DOC, DOCX, TXT, HTML)');
       return;
     }
+
+    console.log('it called');
     
-    setIsUploading(true);
-    
-    // Simulate file upload (in a real app, this would be an API call)
-    setTimeout(() => {
-      // Create document details
+    try {
+      setIsUploading(true);
+      // Step 1: Create FormData and append the file and user_id
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', user._id);  // Send the user_id as part of the FormData
+      const uploadResponse = await fetch(`${import.meta.env.VITE_API_URL}/chat/create`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Error uploading file');
+      }
+      const upload = await uploadResponse.json();
+      // const fileUrl = uploadData.url;
+      console.log(upload);
+
       const details = {
         name: file.name,
         type: fileExt,
         size: file.size,
         lastModified: new Date(file.lastModified).toISOString(),
       };
-      
+
       setDocumentDetails(details);
-      
-      // Create new chat with the uploaded document
-      const newChat = createNewChat(
-        file.name,
-        fileExt,
-        URL.createObjectURL(file) // In a real app, this would be a URL from your server
-      );
-      
-      setIsUploading(false);
-      
       if (isNew) {
         navigate(`/chat/${newChat.id}`);
       }
-    }, 2000);
+
+
+    } catch (error) {
+      console.error("Error during file upload or chat creation:", error);
+      alert('Error uploading file or creating chat');
+    } finally {
+      setIsUploading(false);  // Hide loading state after completion
+    }
+
+
+
+    // setDocumentDetails(details);
+
+    // // Create new chat with the uploaded document
+    // const newChat = createNewChat(
+    //   file.name,
+    //   fileExt,
+    //   URL.createObjectURL(file) // In a real app, this would be a URL from your server
+    // );
+
+    setIsUploading(false);
+
+
+    // }, 2000);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!message.trim() || !currentChat) return;
-    
+
     const trimmedMessage = message.trim();
     setMessage('');
-    
+
     await sendMessage(trimmedMessage);
   };
 
@@ -124,7 +154,7 @@ const ChatPage = ({ isNew = false }) => {
   // Get file icon based on document type
   const getFileIcon = (documentType) => {
     if (!documentType) return <FileText className="text-slate-400" />;
-    
+
     switch (documentType.toLowerCase()) {
       case 'pdf':
         return <FileText className="text-red-400" />;
@@ -154,7 +184,7 @@ const ChatPage = ({ isNew = false }) => {
         {/* Header */}
         <div className="border-b border-slate-800 p-4">
           <div className="flex items-center">
-            <button 
+            <button
               onClick={() => navigate('/dashboard')}
               className="mr-4 text-slate-400 hover:text-slate-200"
             >
@@ -163,7 +193,7 @@ const ChatPage = ({ isNew = false }) => {
             <h1 className="text-xl font-semibold text-slate-100">New Chat</h1>
           </div>
         </div>
-        
+
         {/* Upload Area */}
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center">
@@ -183,7 +213,7 @@ const ChatPage = ({ isNew = false }) => {
                   <span className="text-xl font-semibold ml-2">{documentDetails.name}</span>
                 </div>
                 <p className="text-slate-400 mb-6">Your document has been uploaded successfully!</p>
-                <button 
+                <button
                   className="btn-primary w-full"
                   onClick={() => setIsUploading(false)}
                 >
@@ -192,7 +222,7 @@ const ChatPage = ({ isNew = false }) => {
               </div>
             ) : (
               <>
-                <div 
+                <div
                   className="card p-8 border-2 border-dashed border-slate-700 hover:border-primary-500 transition-colors duration-200 cursor-pointer mb-6"
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -239,7 +269,7 @@ const ChatPage = ({ isNew = false }) => {
       <div className="border-b border-slate-800 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <button 
+            <button
               onClick={() => navigate('/dashboard')}
               className="mr-4 text-slate-400 hover:text-slate-200 lg:hidden"
             >
@@ -254,7 +284,7 @@ const ChatPage = ({ isNew = false }) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-full transition-colors"
               onClick={() => setShowDocumentInfo(!showDocumentInfo)}
             >
@@ -266,7 +296,7 @@ const ChatPage = ({ isNew = false }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Chat Container */}
       <div className="flex-1 overflow-y-auto p-4" ref={chatContainerRef}>
         {currentChat.messages.map((msg) => (
@@ -302,7 +332,7 @@ const ChatPage = ({ isNew = false }) => {
         ))}
         <div ref={messageEndRef} />
       </div>
-      
+
       {/* Message Input */}
       <div className="border-t border-slate-800 p-4">
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
@@ -351,44 +381,44 @@ const ChatPage = ({ isNew = false }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Document Info Sidebar */}
       {showDocumentInfo && (
         <div className="fixed right-0 top-0 h-full w-80 bg-dark-200 border-l border-slate-800 z-40 overflow-y-auto transition-transform duration-300 ease-in-out">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Document Details</h2>
-            <button 
+            <button
               className="text-slate-400 hover:text-slate-200"
               onClick={() => setShowDocumentInfo(false)}
             >
               <X size={20} />
             </button>
           </div>
-          
+
           <div className="p-4">
             <div className="flex justify-center mb-6">
               {getFileIcon(currentChat.documentType)}
             </div>
-            
+
             <h3 className="text-xl font-medium text-center mb-6">{currentChat.documentName}</h3>
-            
+
             <div className="card p-4 mb-4">
               <div className="flex items-center justify-between text-sm mb-3">
                 <span className="text-slate-400">Type</span>
                 <span className="text-slate-200">{currentChat.documentType?.toUpperCase() || 'Document'}</span>
               </div>
-              
+
               <div className="flex items-center justify-between text-sm mb-3">
                 <span className="text-slate-400">Size</span>
                 <span className="text-slate-200">{formatFileSize(125000)}</span>
               </div>
-              
+
               <div className="flex items-start justify-between text-sm">
                 <span className="text-slate-400">Created</span>
                 <span className="text-slate-200 text-right">{formatDate(currentChat.createdAt)}</span>
               </div>
             </div>
-            
+
             <div className="card p-4 mb-6">
               <h4 className="text-sm font-medium text-slate-300 mb-3">Document Summary</h4>
               <p className="text-sm text-slate-400">
@@ -396,7 +426,7 @@ const ChatPage = ({ isNew = false }) => {
                 and requirements. It includes details about timelines, resources, and deliverables.
               </p>
             </div>
-            
+
             <button className="btn-outline w-full flex items-center justify-center gap-2">
               <Download size={16} />
               <span>Download Document</span>
@@ -404,10 +434,10 @@ const ChatPage = ({ isNew = false }) => {
           </div>
         </div>
       )}
-      
+
       {/* Overlay for document info sidebar on mobile */}
       {showDocumentInfo && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
           onClick={() => setShowDocumentInfo(false)}
         />
