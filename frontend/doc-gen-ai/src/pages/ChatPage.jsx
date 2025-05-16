@@ -256,11 +256,12 @@ const ChatPage = ({ isNew = false }) => {
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <button className="card p-4 hover:border-primary-500 transition-colors duration-200 flex items-center">
                     <FileText size={16} className="text-red-400 mr-2" />
-                    <span className="text-sm">Sample Report.pdf</span>
+                    <span className="text-sm"><a href="/Sample.txt" download>Sample.pdf</a></span>
                   </button>
                   <button className="card p-4 hover:border-primary-500 transition-colors duration-200 flex items-center">
                     <File size={16} className="text-blue-400 mr-2" />
-                    <span className="text-sm">User Manual.docx</span>
+                    <span className="text-sm"><a href="/Sample.txt" download>Sample.txt</a>
+</span>
                   </button>
                 </div>
               </>
